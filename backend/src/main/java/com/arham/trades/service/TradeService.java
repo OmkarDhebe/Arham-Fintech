@@ -8,10 +8,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Instant;
 import java.util.List;
 import java.util.Random;
 import java.util.UUID;
+import java.util.stream.IntStream;
 
 @Service
 public class TradeService implements CommandLineRunner {
@@ -33,7 +35,7 @@ public class TradeService implements CommandLineRunner {
     public void run(String... args) {
         if (tradeRepository.count() == 0) {
             System.out.println("Seeding 2000 existing trades...");
-            generateTrades(2000);
+            tradeRepository.saveAll(createMockTrades(2000));
             System.out.println("Initial trades created successfully.");
         }
     }
@@ -46,25 +48,30 @@ public class TradeService implements CommandLineRunner {
         return tradeRepository.count();
     }
 
-    @Transactional
-    public List<Trade> pullMockBseTrades(int count) {
-        return generateTrades(count);
-    }
+    // Used by the mock exchange API to create an unsaved response.
+    public List<Trade> createMockTrades(int count) {
+        if (count < 1 || count > 10000) {
+            throw new IllegalArgumentException(
+                    "Trade count must be between 1 and 10000");
+        }
 
-    private List<Trade> generateTrades(int count) {
         Instant now = Instant.now();
 
-        List<Trade> trades = java.util.stream.IntStream.range(0, count)
+        return IntStream.range(0, count)
                 .mapToObj(i -> new Trade(
                         "TRD-" + UUID.randomUUID(),
                         "CLIENT-" + (1000 + random.nextInt(9000)),
                         symbols[random.nextInt(symbols.length)],
                         1 + random.nextInt(1000),
                         BigDecimal.valueOf(
-                                100 + random.nextDouble() * 2900).setScale(2, java.math.RoundingMode.HALF_UP),
+                                100 + random.nextDouble() * 2900).setScale(2, RoundingMode.HALF_UP),
                         now.minusSeconds(random.nextInt(86400))))
                 .toList();
+    }
 
+    // Save trades received from the mock exchange API.
+    @Transactional
+    public List<Trade> savePulledTrades(List<Trade> trades) {
         return tradeRepository.saveAll(trades);
     }
 }
